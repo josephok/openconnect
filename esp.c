@@ -89,7 +89,7 @@ int esp_setup(struct openconnect_info *vpninfo)
 		else
 			vpninfo->dtls_times.dpd = vpninfo->dtls_attempt_period;
 	}
-
+	
 	print_esp_keys(vpninfo, _("incoming"), &vpninfo->esp_in[vpninfo->current_esp_in]);
 	print_esp_keys(vpninfo, _("outgoing"), &vpninfo->esp_out);
 
@@ -186,16 +186,24 @@ int esp_mainloop(struct openconnect_info *vpninfo, int *timeout, int readable)
 		work_done = 1;
 
 		/* both supported algos (SHA1 and MD5) have 12-byte MAC lengths (RFC2403 and RFC2404) */
-		if (len <= sizeof(pkt->esp) + vpninfo->hmac_out_len)
+		if (len <= sizeof(pkt->esp) + vpninfo->hmac_out_len) {
+			vpn_progress(vpninfo, PRG_INFO,
+                   _("ESP packet too short: len=%d esp=%zu hmac=%d\n"),
+                   len, sizeof(pkt->esp), vpninfo->hmac_out_len);
 			continue;
+		}
 
 		len -= sizeof(pkt->esp) + vpninfo->hmac_out_len;
 		pkt->len = len;
 
 		if (pkt->esp.spi == esp->spi) {
-			if (decrypt_esp_packet(vpninfo, esp, pkt))
+			if (decrypt_esp_packet(vpninfo, esp, pkt)) {
+				vpn_progress(vpninfo, PRG_INFO,
+							_("ESP decrypt failed: spi=0x%08x\n"),
+							(unsigned)ntohl(esp->spi));
 				continue;
-		} else if (pkt->esp.spi == old_esp->spi &&
+			}
+  		} else if (pkt->esp.spi == old_esp->spi &&
 			   ntohl(pkt->esp.seq) + esp->seq < vpninfo->old_esp_maxseq) {
 			vpn_progress(vpninfo, PRG_TRACE,
 				     _("Received ESP packet from old SPI 0x%x, seq %u\n"),

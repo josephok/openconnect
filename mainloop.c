@@ -210,6 +210,12 @@ int openconnect_mainloop(struct openconnect_info *vpninfo,
 				ret = setup_tun_device(vpninfo);
 				if (ret)
 					break;
+				/* TUN setup (vpnc-script + vhost-net) may block for tens of
+				 * seconds. Reset the ESP DPD timer so we don't immediately
+				 * declare the peer dead just because we couldn't service
+				 * esp_mainloop during that time. */
+				if (vpninfo->dtls_state == DTLS_ESTABLISHED)
+					vpninfo->dtls_times.last_rx = time(NULL);
 			}
 		}
 

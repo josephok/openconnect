@@ -582,7 +582,7 @@ static int gpst_parse_config_xml(struct openconnect_info *vpninfo, xmlNode *xml_
 			if (strchr((char *)xml_node->name, '6'))
 				vpn_progress(vpninfo, PRG_ERR, _("Potential IPv6-related GlobalProtect config tag <%s>: %s\n"), xml_node->name, s);
 			else
-				vpn_progress(vpninfo, PRG_DEBUG, _("Unknown GlobalProtect config tag <%s>: %s\n"), xml_node->name, s);
+				vpn_progress(vpninfo, PRG_TRACE, _("Unknown GlobalProtect config tag <%s>: %s\n"), xml_node->name, s);
 		}
 	}
 
@@ -673,6 +673,7 @@ static int gpst_get_config(struct openconnect_info *vpninfo)
 	vpninfo->urlpath = orig_path;
 
 	/* parse getconfig result */
+	vpn_progress(vpninfo, PRG_TRACE, _("getconfig.esp response: %s\n"), xml_buf ? xml_buf : "(null)");
 	if (result >= 0)
 		result = gpst_xml_or_error(vpninfo, xml_buf, gpst_parse_config_xml, NULL, NULL);
 	if (result) {
@@ -1057,6 +1058,12 @@ static int run_hip_script(struct openconnect_info *vpninfo)
 
 static int check_and_maybe_submit_hip_report(struct openconnect_info *vpninfo)
 {
+	/* if we don't have a CSD wrapper, then we won't be able to submit a HIP report
+	even if the server asks us to, so just skip the check and hope for the best. 
+	This is particularly important for platforms where running the HIP script is not yet implemented, 
+	since many GP servers seem to require HIP report submission even though they work fine without it. */
+	if (!vpninfo->csd_wrapper)
+		return 0;
 	int ret;
 
 	ret = check_or_submit_hip_report(vpninfo, NULL);
@@ -1121,6 +1128,10 @@ int gpst_mainloop(struct openconnect_info *vpninfo, int *timeout, int readable)
 	switch (vpninfo->dtls_state) {
 	case DTLS_CONNECTING: /* Can never happen */
 	case DTLS_CONNECTED:
+		vpn_progress(vpninfo, PRG_INFO,
+                   _("gpst: DTLS_CONNECTED→ESTABLISHED at now=%ld last_rx=%ld\n"),
+                   (long)time(NULL),
+                   (long)vpninfo->dtls_times.last_rx);
 		openconnect_close_https(vpninfo, 0); /* don't keep stale HTTPS socket */
 		vpn_progress(vpninfo, PRG_INFO,
 			     _("ESP tunnel connected; exiting HTTPS mainloop.\n"));
@@ -1132,6 +1143,10 @@ int gpst_mainloop(struct openconnect_info *vpninfo, int *timeout, int readable)
 		if (vpninfo->dtls_times.dpd)
 			if (*timeout > vpninfo->dtls_times.dpd * 1000)
 				*timeout = vpninfo->dtls_times.dpd * 1000;
+		/* Defer HIP check: avoid blocking esp_mainloop's DPD timer
+		 * immediately after ESP tunnel is established. HIP was already
+		 * submitted during initial connection; reschedule from now. */
+		vpninfo->last_trojan = time(NULL);
 		/* fall through */
 	case DTLS_ESTABLISHED:
 		/* Rekey or check-and-resubmit HIP if needed */
@@ -1142,8 +1157,10 @@ int gpst_mainloop(struct openconnect_info *vpninfo, int *timeout, int readable)
 		return 0;
 	case DTLS_SECRET:
 	case DTLS_SLEEPING:
-		/* Allow 5 seconds after configuration for ESP to start */
-		if (!ka_check_deadline(timeout, time(NULL), vpninfo->new_dtls_started + 5)) {
+		/* Allow 30 seconds after configuration for ESP to start.
+		 * After rekey+HIP submission, the server may need extra time
+		 * before it is ready to respond to ESP probes. */
+		if (!ka_check_deadline(timeout, time(NULL), vpninfo->new_dtls_started + 30)) {
 			vpninfo->delay_tunnel_reason = "awaiting GPST ESP connection";
 			return 0;
 		}

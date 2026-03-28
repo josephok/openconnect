@@ -881,12 +881,9 @@ int gpst_bye(struct openconnect_info *vpninfo, const char *reason)
 	 * successful, and all manner of malformed junk when unsuccessful.
 	 */
 	if (result >= 0)
-		result = gpst_xml_or_error(vpninfo, xml_buf, NULL, NULL, NULL);
-
-	if (result < 0)
-		vpn_progress(vpninfo, PRG_ERR, _("Logout failed.\n"));
-	else
 		vpn_progress(vpninfo, PRG_INFO, _("Logout successful.\n"));
+	else
+		vpn_progress(vpninfo, PRG_ERR, _("Logout failed.\n"));
 
 out:
 	buf_free(request_body);
