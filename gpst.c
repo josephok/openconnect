@@ -1058,12 +1058,6 @@ static int run_hip_script(struct openconnect_info *vpninfo)
 
 static int check_and_maybe_submit_hip_report(struct openconnect_info *vpninfo)
 {
-	/* if we don't have a CSD wrapper, then we won't be able to submit a HIP report
-	even if the server asks us to, so just skip the check and hope for the best. 
-	This is particularly important for platforms where running the HIP script is not yet implemented, 
-	since many GP servers seem to require HIP report submission even though they work fine without it. */
-	if (!vpninfo->csd_wrapper)
-		return 0;
 	int ret;
 
 	ret = check_or_submit_hip_report(vpninfo, NULL);
@@ -1091,10 +1085,15 @@ int gpst_setup(struct openconnect_info *vpninfo)
 	if (ret)
 		goto out;
 
-	/* Always check HIP after getting configuration */
-	ret = check_and_maybe_submit_hip_report(vpninfo);
-	if (ret)
-		goto out;
+	/* if we don't have a CSD wrapper, then we won't be able to submit a HIP report
+	even if the server asks us to, so just skip the check and hope for the best. 
+	This is particularly important for platforms where running the HIP script is not yet implemented, 
+	since many GP servers seem to require HIP report submission even though they work fine without it. */
+	if (vpninfo->csd_wrapper) {
+		ret = check_and_maybe_submit_hip_report(vpninfo);
+		if (ret)
+			goto out;
+	}
 
 	/* XX: last_trojan is used both as a sentinel to detect the
 	 * first time we check/submit HIP, and for the mainloop to timeout
@@ -1152,15 +1151,15 @@ int gpst_mainloop(struct openconnect_info *vpninfo, int *timeout, int readable)
 		/* Rekey or check-and-resubmit HIP if needed */
 		if (keepalive_action(&vpninfo->ssl_times, timeout) == KA_REKEY)
 			goto do_rekey;
-		else if (trojan_check_deadline(vpninfo, timeout))
+		else if (trojan_check_deadline(vpninfo, timeout) && vpninfo->csd_wrapper)
 			goto do_recheck_hip;
 		return 0;
 	case DTLS_SECRET:
 	case DTLS_SLEEPING:
-		/* Allow 30 seconds after configuration for ESP to start.
+		/* Allow 5 seconds after configuration for ESP to start.
 		 * After rekey+HIP submission, the server may need extra time
 		 * before it is ready to respond to ESP probes. */
-		if (!ka_check_deadline(timeout, time(NULL), vpninfo->new_dtls_started + 30)) {
+		if (!ka_check_deadline(timeout, time(NULL), vpninfo->new_dtls_started + 5)) {
 			vpninfo->delay_tunnel_reason = "awaiting GPST ESP connection";
 			return 0;
 		}
@@ -1309,7 +1308,7 @@ int gpst_mainloop(struct openconnect_info *vpninfo, int *timeout, int readable)
 		vpninfo->current_ssl_pkt = NULL;
 	}
 
-	if (trojan_check_deadline(vpninfo, timeout)) {
+	if (trojan_check_deadline(vpninfo, timeout) && vpninfo->csd_wrapper) {
 	do_recheck_hip:
 		vpn_progress(vpninfo, PRG_INFO, _("GlobalProtect HIP check due\n"));
 		/* We could just be lazy and treat this as a reconnect, but that
