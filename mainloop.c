@@ -512,3 +512,14 @@ int trojan_check_deadline(struct openconnect_info *vpninfo, int *timeout)
 		return 0;
 	}
 }
+
+int check_auth_expiration(struct openconnect_info *vpninfo, int *timeout)
+{
+	time_t now = time(NULL);
+	
+	if (vpninfo->auth_expiration && ka_check_deadline(timeout, now, vpninfo->auth_expiration)) {
+		vpninfo->quit_reason = "Authentication expired";
+		return 1;
+	}
+	return 0;
+}

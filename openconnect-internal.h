@@ -1522,6 +1522,7 @@ int keepalive_action(struct keepalive_info *ka, int *timeout);
 int ka_stalled_action(struct keepalive_info *ka, int *timeout);
 int ka_check_deadline(int *timeout, time_t now, time_t due);
 int trojan_check_deadline(struct openconnect_info *vpninfo, int *timeout);
+int check_auth_expiration(struct openconnect_info *vpninfo, int *timeout);
 
 /* xml.c */
 int config_lookup_host(struct openconnect_info *vpninfo, const char *host);

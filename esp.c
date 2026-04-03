@@ -295,6 +295,8 @@ int esp_mainloop(struct openconnect_info *vpninfo, int *timeout, int readable)
 
 	if (vpninfo->dtls_need_reconnect) {
 	need_reconnect:
+		if (check_auth_expiration(vpninfo, timeout))
+			return -EACCES;
 		if (vpninfo->proto->udp_close)
 			vpninfo->proto->udp_close(vpninfo);
 	}

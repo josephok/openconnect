@@ -696,14 +696,17 @@ static int gpst_get_config(struct openconnect_info *vpninfo)
 #else
 		no_esp_reason = _("ESP support not available in this build");
 #endif
-		if (!no_esp_reason)
-			vpninfo->ip_info.mtu = calculate_mtu(
+		int esp_mtu = calculate_mtu(
 				vpninfo, 1,
 				ESP_HEADER_SIZE + vpninfo->hmac_out_len + MAX_IV_SIZE, /* ESP header size */
 				ESP_FOOTER_SIZE, /* ESP footer (contributes to payload before padding) */
 				16 /* blocksize for both AES-128 and AES-256 */ );
-		else
-			vpninfo->ip_info.mtu = calculate_mtu(vpninfo, 0, TLS_OVERHEAD, 0, 1);
+		int ssl_mtu = calculate_mtu(vpninfo, 0, TLS_OVERHEAD, 0, 1);
+		vpn_progress(vpninfo, PRG_DEBUG,
+			     _("No MTU received from server; Base MTU=%d, calculated MTU %d for ESP tunnel and %d for SSL tunnel.\n"),
+			     vpninfo->basemtu, esp_mtu, ssl_mtu);
+
+		vpninfo->ip_info.mtu = MIN(esp_mtu, ssl_mtu);
 
 		vpn_progress(vpninfo, PRG_ERR,
 			     _("No MTU received. Calculated %d for %s%s\n"), vpninfo->ip_info.mtu,
@@ -1127,10 +1130,6 @@ int gpst_mainloop(struct openconnect_info *vpninfo, int *timeout, int readable)
 	switch (vpninfo->dtls_state) {
 	case DTLS_CONNECTING: /* Can never happen */
 	case DTLS_CONNECTED:
-		vpn_progress(vpninfo, PRG_INFO,
-                   _("gpst: DTLS_CONNECTED→ESTABLISHED at now=%ld last_rx=%ld\n"),
-                   (long)time(NULL),
-                   (long)vpninfo->dtls_times.last_rx);
 		openconnect_close_https(vpninfo, 0); /* don't keep stale HTTPS socket */
 		vpn_progress(vpninfo, PRG_INFO,
 			     _("ESP tunnel connected; exiting HTTPS mainloop.\n"));
@@ -1335,13 +1334,20 @@ int gpst_mainloop(struct openconnect_info *vpninfo, int *timeout, int readable)
 	switch (keepalive_action(&vpninfo->ssl_times, timeout)) {
 	case KA_REKEY:
 	do_rekey:
-		vpn_progress(vpninfo, PRG_INFO, _("GlobalProtect rekey due\n"));
+		vpn_progress(vpninfo, PRG_INFO, _("GlobalProtect ssl rekey due\n"));
+		if (vpninfo->dtls_state == DTLS_ESTABLISHED) {
+			vpn_progress(vpninfo, PRG_INFO,
+					 _("ESP tunnel established, Doing nothing!\n"));
+			break;
+		}
 		goto do_reconnect;
 	case KA_DPD_DEAD:
 	peer_dead:
 		vpn_progress(vpninfo, PRG_ERR,
 			     _("GPST Dead Peer Detection detected dead peer!\n"));
 	do_reconnect:
+	    if (check_auth_expiration(vpninfo, timeout))
+			return -EACCES;
 		ret = ssl_reconnect(vpninfo);
 		if (ret) {
 			vpn_progress(vpninfo, PRG_ERR, _("Reconnect failed\n"));
