@@ -696,7 +696,7 @@ int script_config_tun(struct openconnect_info *vpninfo, const char *reason)
 		apply_script_env(vpninfo->script_env);
 
 		setenv("reason", reason, 1);
-
+		vpn_progress(vpninfo, PRG_INFO, _("Running script '%s' for reason '%s'.\n"), script, reason);
 		execl("/bin/sh", "/bin/sh", "-c", script, NULL);
 		exit(127);
 	}
@@ -722,6 +722,7 @@ int script_config_tun(struct openconnect_info *vpninfo, const char *reason)
 			     vpninfo->vpnc_script, ret);
 		return -EIO;
 	}
+	vpn_progress(vpninfo, PRG_INFO, _("Script completed successfully.\n"));
 	return 0;
 }
 #endif

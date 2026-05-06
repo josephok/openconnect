@@ -489,6 +489,7 @@ int openconnect_setup_tun_script(struct openconnect_info *vpninfo,
 		close(fds[0]);
 		script_setenv_int(vpninfo, "VPNFD", fds[1]);
 		apply_script_env(vpninfo->script_env);
+		vpn_progress(vpninfo, PRG_INFO, _("Running script '%s' to setup tun.\n"), vpninfo->vpnc_script);
 		execl("/bin/sh", "/bin/sh", "-c", vpninfo->vpnc_script, NULL);
 		perror(_("execl"));
 		exit(1);
@@ -496,6 +497,8 @@ int openconnect_setup_tun_script(struct openconnect_info *vpninfo,
 	close(fds[1]);
 	vpninfo->script_tun = pid;
 	vpninfo->ifname = strdup(_("(script)"));
+
+	vpn_progress(vpninfo, PRG_INFO, _("Script setup tun successfully.\n"));
 
 	return openconnect_setup_tun_fd(vpninfo, fds[0]);
 }
