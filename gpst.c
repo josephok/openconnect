@@ -1268,6 +1268,8 @@ int gpst_mainloop(struct openconnect_info *vpninfo, int *timeout, int readable)
 		return 1;
 	}
 
+	if (check_auth_expiration(vpninfo, timeout))
+		return -EACCES;
 
 	/* If SSL_write() fails we are expected to try again. With exactly
 	   the same data, at exactly the same location. So we keep the
@@ -1346,8 +1348,6 @@ int gpst_mainloop(struct openconnect_info *vpninfo, int *timeout, int readable)
 		vpn_progress(vpninfo, PRG_ERR,
 			     _("GPST Dead Peer Detection detected dead peer!\n"));
 	do_reconnect:
-	    if (check_auth_expiration(vpninfo, timeout))
-			return -EACCES;
 		ret = ssl_reconnect(vpninfo);
 		if (ret) {
 			vpn_progress(vpninfo, PRG_ERR, _("Reconnect failed\n"));
