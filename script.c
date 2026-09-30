@@ -364,22 +364,15 @@ void prepare_script_env(struct openconnect_info *vpninfo)
 	}
 
 	if (vpninfo->ip_info.dns[0]) {
-		// script_setenv(vpninfo, "INTERNAL_IP4_DNS", vpninfo->ip_info.dns[0], 0, 0);
-		vpn_progress(vpninfo, PRG_INFO,
-			     _("DNS server: %s\n"), vpninfo->ip_info.dns[0]);
+		script_setenv(vpninfo, "INTERNAL_IP4_DNS", vpninfo->ip_info.dns[0], 0, 0);
 	}
-
 	else
 		script_setenv(vpninfo, "INTERNAL_IP4_DNS", NULL, 0, 0);
 	if (vpninfo->ip_info.dns[1]) {
-		// script_setenv(vpninfo, "INTERNAL_IP4_DNS", vpninfo->ip_info.dns[1], 0, 1);
-		vpn_progress(vpninfo, PRG_INFO,
-			     _("DNS server: %s\n"), vpninfo->ip_info.dns[1]);
+		script_setenv(vpninfo, "INTERNAL_IP4_DNS", vpninfo->ip_info.dns[1], 0, 1);
 	}
 	if (vpninfo->ip_info.dns[2]) {
-		// script_setenv(vpninfo, "INTERNAL_IP4_DNS", vpninfo->ip_info.dns[2], 0, 1);
-		vpn_progress(vpninfo, PRG_INFO,
-			     _("DNS server: %s\n"), vpninfo->ip_info.dns[2]);
+		script_setenv(vpninfo, "INTERNAL_IP4_DNS", vpninfo->ip_info.dns[2], 0, 1);
 	}
 
 	/* poorly configured VPNs send non-sensical 0.0.0.0 NBNS server address */

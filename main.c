@@ -1622,6 +1622,15 @@ static int autocomplete(int argc, char **argv)
 	return 0;
 }
 
+static const char *get_dns_server(const struct oc_ip_info *ip_info) {
+	if (!ip_info)
+		return NULL;
+	for (int i = 0; i < 3; i++)
+		if (ip_info->dns[i])
+			return ip_info->dns[i];
+	return NULL;
+}
+
 static void print_connection_info(struct openconnect_info *vpninfo)
 {
 	const struct oc_ip_info *ip_info;
@@ -1656,11 +1665,13 @@ static void print_connection_info(struct openconnect_info *vpninfo)
 
 	ssl_compr = openconnect_get_cstp_compression(vpninfo);
 	udp_compr = openconnect_get_dtls_compression(vpninfo);
+	const char *dns_server = get_dns_server(ip_info);
 	vpn_progress(vpninfo, PRG_INFO,
-		     _("Configured as %s%s%s, with SSL%s%s %s and %s%s%s %s\n"),
+		     _("Configured as %s%s%s, DNS server: %s, with SSL%s%s %s and %s%s%s %s\n"),
 		     ip_info->addr?:"",
 		     ((ip_info->netmask6 || ip_info->addr6) && ip_info->addr) ? " + " : "",
 		     ip_info->netmask6 ? : (ip_info->addr6 ? : ""),
+		     dns_server ? dns_server : "",
 		     ssl_compr ? " + " : "", ssl_compr ? : "",
 		     ssl_state,
 		     vpninfo->proto->udp_protocol ? : "UDP", udp_compr ? " + " : "", udp_compr ? : "",
