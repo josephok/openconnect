@@ -1119,6 +1119,9 @@ out:
 
 int gpst_mainloop(struct openconnect_info *vpninfo, int *timeout, int readable)
 {
+	if (check_auth_expiration(vpninfo, timeout))
+		return -EACCES;
+
 	int ret;
 	int work_done = 0;
 	uint16_t ethertype;
@@ -1267,9 +1270,6 @@ int gpst_mainloop(struct openconnect_info *vpninfo, int *timeout, int readable)
 		vpninfo->quit_reason = "Unknown packet received";
 		return 1;
 	}
-
-	if (check_auth_expiration(vpninfo, timeout))
-		return -EACCES;
 
 	/* If SSL_write() fails we are expected to try again. With exactly
 	   the same data, at exactly the same location. So we keep the

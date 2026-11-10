@@ -133,6 +133,9 @@ int construct_esp_packet(struct openconnect_info *vpninfo, struct pkt *pkt, uint
 
 int esp_mainloop(struct openconnect_info *vpninfo, int *timeout, int readable)
 {
+	if (check_auth_expiration(vpninfo, timeout))
+		return -EACCES;
+
 	struct esp *esp = &vpninfo->esp_in[vpninfo->current_esp_in];
 	struct esp *old_esp = &vpninfo->esp_in[vpninfo->current_esp_in ^ 1];
 	struct pkt *this;
@@ -292,9 +295,6 @@ int esp_mainloop(struct openconnect_info *vpninfo, int *timeout, int readable)
 			vpninfo->dtls_pkt = NULL;
 		}
 	}
-
-	if (check_auth_expiration(vpninfo, timeout))
-		return -EACCES;
 
 	if (vpninfo->dtls_need_reconnect) {
 	need_reconnect:
