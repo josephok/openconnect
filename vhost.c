@@ -464,7 +464,7 @@ static inline int process_ring(struct openconnect_info *vpninfo, int tx, uint64_
 	 * For TX packets (incoming from VPN into the tun device) we just
 	 * free them now. For RX packets from the tun device we fill in
 	 * the length and queue them for sending over the VPN. */
-	uint16_t used_idx = vio16(ring->used->idx);
+	uint16_t used_idx = vio16(__atomic_load_n(&ring->used->idx, __ATOMIC_ACQUIRE));
 	while (used_idx != ring->seen_used) {
 		uint32_t desc = vio32(ring->used->ring[ring->seen_used & ring_mask].id);
 		uint32_t len  = vio32(ring->used->ring[ring->seen_used & ring_mask].len);
@@ -568,7 +568,6 @@ static inline int process_ring(struct openconnect_info *vpninfo, int tx, uint64_
 			ring->desc[desc].flags = vio16(VRING_DESC_F_WRITE);
 		ring->desc[desc].addr = vio64((unsigned long)this + pkt_offset(virtio.h));
 		ring->desc[desc].len = vio32(this->len + sizeof(this->virtio.h));
-		barrier();
 
 		if (debug_vhost) {
 			if (tx) {
@@ -586,10 +585,12 @@ static inline int process_ring(struct openconnect_info *vpninfo, int tx, uint64_
 		}
 
 
-		ring->avail->idx = vio16(++next_avail);
+		/* Release: the descriptor and ring contents must be visible before the index. */
+		__atomic_store_n(&ring->avail->idx, vio16(++next_avail), __ATOMIC_RELEASE);
+		/* Full barrier needed: the store above must not be reordered after
+		 * the load of avail_event below (virtio_mb). */
 		barrier();
 		uint16_t avail_event = AVAIL_EVENT(vpninfo, ring);
-		barrier();
 		if (avail_event == vio16(next_avail-1))
 			*kick = 1;
 
@@ -638,7 +639,6 @@ int vhost_tun_mainloop(struct openconnect_info *vpninfo, int *timeout, int reada
 		return 0;
 
 	if (kick) {
-		barrier();
 		if (write(vpninfo->vhost_kick_fd, &kick, sizeof(kick)) != sizeof(kick)) {
 			/* Can never happen */
 			vpn_progress(vpninfo, PRG_ERR,
